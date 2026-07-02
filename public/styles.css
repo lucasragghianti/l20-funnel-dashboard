@@ -385,6 +385,50 @@ h2 {
   overflow-x: auto;
 }
 
+.filterBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.activeFilters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.activeFilters span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.activeFilters b {
+  margin-left: 4px;
+  color: var(--text);
+}
+
+#clearFilters {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-weight: 800;
+}
+
 table {
   width: 100%;
   min-width: 980px;
@@ -425,6 +469,14 @@ td:not(:first-child) {
 
 .dailyTable tr {
   background: rgba(255, 255, 255, 0.02);
+}
+
+.clickableRow {
+  cursor: pointer;
+}
+
+.clickableRow:hover td {
+  background: rgba(59, 142, 219, 0.24);
 }
 
 .totalRow td {
@@ -474,8 +526,13 @@ td:not(:first-child) {
   .field input,
   .quick button,
   .tabs button,
-  .tableNav button {
+  .tableNav button,
+  #clearFilters {
     width: 100%;
+  }
+
+  .filterBar {
+    display: grid;
   }
 
   .metricSplit {
