@@ -7,7 +7,7 @@
     <meta http-equiv="pragma" content="no-cache" />
     <meta http-equiv="expires" content="0" />
     <title>Funil de Trafego L20</title>
-    <link rel="stylesheet" href="./styles.css?v=20260703" />
+    <link rel="stylesheet" href="./styles.css?v=20260704" />
   </head>
   <body>
     <main class="shell">
@@ -103,9 +103,22 @@
           </div>
           <div class="panel">
             <div class="panelHeader">
-              <h2>Investimento e CPL por dia</h2>
+              <h2 id="filterChartTitle">Leads e CPL por dia</h2>
             </div>
-            <canvas id="platformCplChart" height="260"></canvas>
+            <canvas id="platformFilterChart" height="260"></canvas>
+          </div>
+        </section>
+
+        <section class="panel tablePanel">
+          <div class="panelHeader">
+            <h2 id="platformDailyTitle">Visao diaria</h2>
+            <span id="platformDailyHint">Metricas por dia da aba selecionada</span>
+          </div>
+          <div class="tableWrap">
+            <table class="dailyTable">
+              <thead id="platformDailyHead"></thead>
+              <tbody id="platformDailyBody"></tbody>
+            </table>
           </div>
         </section>
 
@@ -114,10 +127,14 @@
           <button type="button" data-table="adset">Conjuntos</button>
           <button type="button" data-table="ad">Anuncios</button>
         </div>
+        <div class="filterBar">
+          <div id="activeFilters" class="activeFilters"></div>
+          <button id="clearFilters" type="button">Limpar filtros</button>
+        </div>
         <div class="panel tablePanel">
           <div class="panelHeader">
             <h2 id="tableTitle">Otimizacao por campanha</h2>
-            <span id="tableHint">Ordenado pelo menor CPL</span>
+            <span id="tableHint">Clique em uma linha para filtrar a aba</span>
           </div>
           <div class="tableWrap">
             <table>
@@ -143,6 +160,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
-    <script src="./app.js?v=20260703"></script>
+    <script src="./app.js?v=20260704"></script>
   </body>
 </html>
