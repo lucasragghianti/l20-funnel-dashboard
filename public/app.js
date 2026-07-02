@@ -2,6 +2,10 @@ const state = {
   data: null,
   tab: "all",
   table: "campaign",
+  filters: {
+    meta: {},
+    google: {}
+  },
   charts: {}
 };
 
@@ -66,6 +70,36 @@ function addRates(item) {
 
 function getRows(tab, start, end) {
   return state.data.rows.filter((row) => (tab === "all" || row.source === tab) && inRange(row, start, end));
+}
+
+function sameValue(a, b) {
+  return String(a || "") === String(b || "");
+}
+
+function getFilter(tab = state.tab) {
+  return state.filters[tab] || {};
+}
+
+function getFilteredRows(tab = state.tab, start = $("#startDate").value, end = $("#endDate").value) {
+  const filter = getFilter(tab);
+  return getRows(tab, start, end).filter((row) => {
+    return (!filter.campaign || sameValue(row.campaign, filter.campaign))
+      && (!filter.adset || sameValue(row.adset, filter.adset))
+      && (!filter.ad || sameValue(row.ad, filter.ad));
+  });
+}
+
+function getRowsForMenu(tab = state.tab, field = state.table, start = $("#startDate").value, end = $("#endDate").value) {
+  const filter = getFilter(tab);
+  return getRows(tab, start, end).filter((row) => {
+    if (field === "campaign") return true;
+    if (field === "adset") return !filter.campaign || sameValue(row.campaign, filter.campaign);
+    if (field === "ad") {
+      return (!filter.campaign || sameValue(row.campaign, filter.campaign))
+        && (!filter.adset || sameValue(row.adset, filter.adset));
+    }
+    return true;
+  });
 }
 
 function getLeads(tab, start, end) {
@@ -175,10 +209,7 @@ function renderMetricRail() {
       mainLabel: "Leads",
       mainValue: fmtNumber.format(current.leads),
       sideLabel: "CPL",
-      sideValue: fmtCurrency.format(current.cpl),
-      subLabel: "Taxa de qualificacao",
-      subValue: fmtPercent.format(current.qualificationRate),
-      change: metricDelta("qualificationRate")
+      sideValue: fmtCurrency.format(current.cpl)
     }
   ];
 
@@ -192,17 +223,15 @@ function renderMetricRail() {
         <div class="metricSide">
           <span>${item.sideLabel}</span>
           <strong>${item.sideValue}</strong>
-          <small>${item.subLabel}: ${item.subValue} <b class="${item.change.className}">${item.change.short}</b></small>
+          ${item.subLabel ? `<small>${item.subLabel}: ${item.subValue} <b class="${item.change.className}">${item.change.short}</b></small>` : ""}
         </div>
       </article>
     `)
     .join("");
 }
 
-function dailySeries(tab = state.tab) {
-  const start = $("#startDate").value;
-  const end = $("#endDate").value;
-  const rows = getRows(tab, start, end);
+function dailySeries(tab = state.tab, rowsOverride = null) {
+  const rows = rowsOverride || getRows(tab, $("#startDate").value, $("#endDate").value);
   const map = new Map();
   rows.forEach((row) => {
     if (!map.has(row.date)) map.set(row.date, []);
@@ -231,8 +260,8 @@ function chartOptions() {
   };
 }
 
-function renderLineChart(canvasId, tab, chartKey) {
-  const series = dailySeries(tab);
+function renderLineChart(canvasId, tab, chartKey, rowsOverride = null) {
+  const series = dailySeries(tab, rowsOverride);
   const labels = series.map((item) => formatDay(item.date));
   state.charts[chartKey]?.destroy();
   state.charts[chartKey] = new Chart($(`#${canvasId}`), {
@@ -248,8 +277,8 @@ function renderLineChart(canvasId, tab, chartKey) {
   });
 }
 
-function renderCplChart(canvasId, tab, chartKey) {
-  const series = dailySeries(tab);
+function renderCplChart(canvasId, tab, chartKey, rowsOverride = null) {
+  const series = dailySeries(tab, rowsOverride);
   const labels = series.map((item) => formatDay(item.date));
   state.charts[chartKey]?.destroy();
   state.charts[chartKey] = new Chart($(`#${canvasId}`), {
@@ -258,6 +287,22 @@ function renderCplChart(canvasId, tab, chartKey) {
       datasets: [
         { type: "bar", label: "Investimento", data: series.map((item) => item.spend), backgroundColor: chartColor(0), yAxisID: "money" },
         { type: "line", label: "CPL", data: series.map((item) => item.cpl), borderColor: chartColor(2), backgroundColor: chartColor(2), tension: 0.28, yAxisID: "count" }
+      ]
+    },
+    options: chartOptions()
+  });
+}
+
+function renderLeadCplChart(canvasId, tab, chartKey, rowsOverride = null) {
+  const series = dailySeries(tab, rowsOverride);
+  const labels = series.map((item) => formatDay(item.date));
+  state.charts[chartKey]?.destroy();
+  state.charts[chartKey] = new Chart($(`#${canvasId}`), {
+    data: {
+      labels,
+      datasets: [
+        { type: "line", label: "Leads", data: series.map((item) => item.leads), borderColor: chartColor(1), backgroundColor: chartColor(1), tension: 0.28, yAxisID: "count" },
+        { type: "line", label: "CPL", data: series.map((item) => item.cpl), borderColor: chartColor(2), backgroundColor: chartColor(2), tension: 0.28, yAxisID: "money" }
       ]
     },
     options: chartOptions()
@@ -284,8 +329,8 @@ function heat(value, max, kind = "normal") {
   return `style="background-color: rgba(125, 140, 190, ${0.18 + p * 0.38})"`;
 }
 
-function renderDailyTable(tab = "all", targetId = "dailyTableBody", compact = false) {
-  const rows = dailySeries(tab).sort((a, b) => b.date.localeCompare(a.date));
+function renderDailyTable(tab = "all", targetId = "dailyTableBody", compact = false, rowsOverride = null) {
+  const rows = dailySeries(tab, rowsOverride).sort((a, b) => b.date.localeCompare(a.date));
   const totals = addRates({ ...aggregate(rows) });
   const max = {
     spend: Math.max(...rows.map((row) => row.spend), 0),
@@ -319,6 +364,53 @@ function renderDailyTable(tab = "all", targetId = "dailyTableBody", compact = fa
       <td>${fmtPercent.format(totals.ctr)}</td>
     </tr>`
     : `<tr><td class="empty" colspan="7">Nenhum dado encontrado para o periodo selecionado.</td></tr>`;
+}
+
+function renderPlatformDailyTable() {
+  const tab = state.tab;
+  const rows = getFilteredRows(tab);
+  const series = dailySeries(tab, rows).sort((a, b) => b.date.localeCompare(a.date));
+  const isMeta = tab === "meta";
+  const columns = isMeta
+    ? [
+        ["Dia", "date"],
+        ["Investimento c/ Imposto", "spend"],
+        ["Leads", "leads"],
+        ["CPL", "cpl"],
+        ["CPM", "cpm"],
+        ["CPC", "cpc"],
+        ["CTR", "ctr"],
+        ["Connect Rate", "connectRate"],
+        ["Conversao LP", "lpConversion"]
+      ]
+    : [
+        ["Dia", "date"],
+        ["Investimento", "spend"],
+        ["Leads", "leads"],
+        ["CPL", "cpl"],
+        ["CPM", "cpm"],
+        ["CTR", "ctr"]
+      ];
+  const totals = addRates({ ...aggregate(series) });
+  const max = Object.fromEntries(columns.map(([, key]) => [key, Math.max(...series.map((row) => row[key] || 0), 0)]));
+
+  $("#platformDailyTitle").textContent = `Visao diaria ${isMeta ? "Meta Ads" : "Google Ads"}`;
+  $("#platformDailyHead").innerHTML = `<tr>${columns.map(([label]) => `<th>${label}</th>`).join("")}</tr>`;
+  $("#platformDailyBody").innerHTML = series.length
+    ? `${series.map((row) => `
+      <tr>
+        ${columns.map(([, key], index) => `<td ${index && key !== "date" ? heat(row[key], max[key], key === "ctr" || key === "connectRate" || key === "lpConversion" ? "green" : key === "spend" || key === "cpc" ? "money" : "normal") : ""}>${formatMetric(key, row[key], row.date)}</td>`).join("")}
+      </tr>
+    `).join("")}
+    <tr class="totalRow">${columns.map(([, key]) => `<td>${formatMetric(key, totals[key], "Total geral")}</td>`).join("")}</tr>`
+    : `<tr><td class="empty" colspan="${columns.length}">Nenhum dado encontrado para os filtros selecionados.</td></tr>`;
+}
+
+function formatMetric(key, value, dateValue) {
+  if (key === "date") return dateValue === "Total geral" ? dateValue : formatDay(dateValue);
+  if (["spend", "cpl", "cpm", "cpc"].includes(key)) return fmtCurrency.format(value || 0);
+  if (["ctr", "connectRate", "lpConversion"].includes(key)) return fmtPercent.format(value || 0);
+  return fmtNumber.format(value || 0);
 }
 
 function platformCard(label, value, target, percent, good) {
@@ -388,15 +480,25 @@ function renderPlatformResults() {
   });
 }
 
+function renderActiveFilters() {
+  const labels = { campaign: "Campanha", adset: "Grupo", ad: "Anuncio" };
+  const filter = getFilter();
+  const entries = Object.entries(filter).filter(([, value]) => value);
+  $("#activeFilters").innerHTML = entries.length
+    ? entries.map(([key, value]) => `<span>${labels[key]}: <b>${value}</b></span>`).join("")
+    : `<span>Nenhum filtro aplicado</span>`;
+}
+
 function renderOptimizationTable() {
   const labels = { campaign: "campanha", adset: "conjunto", ad: "anuncio" };
   const start = $("#startDate").value;
   const end = $("#endDate").value;
-  const rows = groupBy(getRows(state.tab, start, end), state.table);
+  const baseRows = getRowsForMenu(state.tab, state.table, start, end);
+  const rows = groupBy(baseRows, state.table);
   $("#tableTitle").textContent = `Otimizacao por ${labels[state.table]}`;
   $("#tableBody").innerHTML = rows.length
     ? rows.map((row) => `
-      <tr>
+      <tr class="clickableRow" data-filter-field="${state.table}" data-filter-value="${encodeURIComponent(row.name)}">
         <td>${row.name}</td>
         <td>${fmtCurrency.format(row.spend)}</td>
         <td>${fmtNumber.format(row.impressions)}</td>
@@ -410,6 +512,26 @@ function renderOptimizationTable() {
       </tr>
     `).join("")
     : `<tr><td class="empty" colspan="10">Nenhum dado encontrado para o periodo selecionado.</td></tr>`;
+  $$("#tableBody .clickableRow").forEach((row) => {
+    row.addEventListener("click", () => {
+      const field = row.dataset.filterField;
+      const value = decodeURIComponent(row.dataset.filterValue);
+      const filter = state.filters[state.tab];
+      filter[field] = value;
+      if (field === "campaign") {
+        delete filter.adset;
+        delete filter.ad;
+        state.table = "adset";
+      }
+      if (field === "adset") {
+        delete filter.ad;
+        state.table = "ad";
+      }
+      $$(".tableNav button").forEach((button) => button.classList.toggle("active", button.dataset.table === state.table));
+      renderPlatform();
+    });
+  });
+  renderActiveFilters();
 }
 
 function renderGeneral() {
@@ -425,9 +547,13 @@ function renderGeneral() {
 function renderPlatform() {
   $("#generalView").hidden = true;
   $("#platformView").hidden = false;
-  renderLineChart("platformDailyChart", state.tab, "platformDaily");
-  renderCplChart("platformCplChart", state.tab, "platformCpl");
+  const filteredRows = getFilteredRows(state.tab);
+  renderLineChart("platformDailyChart", state.tab, "platformDaily", filteredRows);
+  renderLeadCplChart("platformFilterChart", state.tab, "platformFilter", filteredRows);
+  renderPlatformDailyTable();
   renderOptimizationTable();
+  const suffix = Object.values(getFilter()).filter(Boolean).length ? " filtrado" : "";
+  $("#filterChartTitle").textContent = `Leads e CPL por dia${suffix}`;
 }
 
 function render() {
@@ -456,6 +582,8 @@ function bindEvents() {
     button.addEventListener("click", () => {
       $$(".tabs button").forEach((item) => item.classList.toggle("active", item === button));
       state.tab = button.dataset.tab;
+      state.table = "campaign";
+      $$(".tableNav button").forEach((item) => item.classList.toggle("active", item.dataset.table === "campaign"));
       render();
     });
   });
@@ -466,6 +594,14 @@ function bindEvents() {
       state.table = button.dataset.table;
       renderOptimizationTable();
     });
+  });
+
+  $("#clearFilters").addEventListener("click", () => {
+    if (state.tab === "all") return;
+    state.filters[state.tab] = {};
+    state.table = "campaign";
+    $$(".tableNav button").forEach((item) => item.classList.toggle("active", item.dataset.table === "campaign"));
+    renderPlatform();
   });
 }
 
