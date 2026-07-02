@@ -6,15 +6,15 @@
     <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="pragma" content="no-cache" />
     <meta http-equiv="expires" content="0" />
-    <title>Funil de Tráfego L20</title>
-    <link rel="stylesheet" href="./styles.css?v=20260702" />
+    <title>Funil de Trafego L20</title>
+    <link rel="stylesheet" href="./styles.css?v=20260703" />
   </head>
   <body>
     <main class="shell">
       <header class="topbar">
         <div>
           <p class="eyebrow">Dashboard de performance</p>
-          <h1>Funil de Tráfego L20</h1>
+          <h1>Funil de Trafego L20</h1>
         </div>
         <div class="status">
           <span id="updatedAt">Atualizando...</span>
@@ -24,7 +24,7 @@
 
       <section class="controls" aria-label="Filtros">
         <div class="field">
-          <label for="startDate">Início</label>
+          <label for="startDate">Inicio</label>
           <input id="startDate" type="date" />
         </div>
         <div class="field">
@@ -47,30 +47,76 @@
 
       <section class="kpis" id="kpis"></section>
 
-      <section class="charts">
-        <div class="panel">
-          <div class="panelHeader">
-            <h2>Investimento e leads por dia</h2>
+      <section id="generalView">
+        <section class="overviewGrid">
+          <div class="panel">
+            <div class="panelHeader">
+              <h2>Investimento e leads por dia</h2>
+            </div>
+            <canvas id="dailyChart" height="300"></canvas>
           </div>
-          <canvas id="dailyChart" height="260"></canvas>
-        </div>
-        <div class="panel">
-          <div class="panelHeader">
-            <h2>Eficiência do período</h2>
+          <div class="metricRail" id="metricRail"></div>
+        </section>
+
+        <section class="singleChart">
+          <div class="panel">
+            <div class="panelHeader">
+              <h2>Investimento e CPL por dia</h2>
+            </div>
+            <canvas id="cplChart" height="280"></canvas>
           </div>
-          <canvas id="efficiencyChart" height="260"></canvas>
-        </div>
+        </section>
+
+        <section class="panel tablePanel">
+          <div class="panelHeader">
+            <h2>Resultado diario</h2>
+            <span>Investimento, leads trafego, CPL, CPM, CPC e CTR</span>
+          </div>
+          <div class="tableWrap">
+            <table class="dailyTable">
+              <thead>
+                <tr>
+                  <th>Dia</th>
+                  <th>Investimento</th>
+                  <th>Leads Trafego</th>
+                  <th>CPL</th>
+                  <th>CPM</th>
+                  <th>CPC</th>
+                  <th>CTR</th>
+                </tr>
+              </thead>
+              <tbody id="dailyTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="platformResults" class="platformResults"></section>
       </section>
 
-      <section class="tables">
+      <section id="platformView" class="platformView">
+        <section class="charts">
+          <div class="panel">
+            <div class="panelHeader">
+              <h2>Investimento e leads por dia</h2>
+            </div>
+            <canvas id="platformDailyChart" height="260"></canvas>
+          </div>
+          <div class="panel">
+            <div class="panelHeader">
+              <h2>Investimento e CPL por dia</h2>
+            </div>
+            <canvas id="platformCplChart" height="260"></canvas>
+          </div>
+        </section>
+
         <div class="tableNav">
           <button type="button" class="active" data-table="campaign">Campanhas</button>
           <button type="button" data-table="adset">Conjuntos</button>
-          <button type="button" data-table="ad">Anúncios</button>
+          <button type="button" data-table="ad">Anuncios</button>
         </div>
         <div class="panel tablePanel">
           <div class="panelHeader">
-            <h2 id="tableTitle">Otimização por campanha</h2>
+            <h2 id="tableTitle">Otimizacao por campanha</h2>
             <span id="tableHint">Ordenado pelo menor CPL</span>
           </div>
           <div class="tableWrap">
@@ -79,7 +125,7 @@
                 <tr>
                   <th>Nome</th>
                   <th>Investimento</th>
-                  <th>Impressões</th>
+                  <th>Impressoes</th>
                   <th>Cliques</th>
                   <th>Leads</th>
                   <th>CPM</th>
@@ -97,6 +143,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
-    <script src="./app.js?v=20260702"></script>
+    <script src="./app.js?v=20260703"></script>
   </body>
 </html>
