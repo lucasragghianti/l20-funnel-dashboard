@@ -5,10 +5,15 @@ const state = {
   charts: {}
 };
 
+const TARGETS = {
+  meta: { spend: 150000, leads: 42800, cpl: 3.5 },
+  google: { spend: 160000, leads: 35550, cpl: 4.5 }
+};
+
 const fmtCurrency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const fmtNumber = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
-const fmtPercent = new Intl.NumberFormat("pt-BR", { style: "percent", minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtDecimal = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtPercent = new Intl.NumberFormat("pt-BR", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const fmtDate = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "short", year: "numeric" });
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -24,6 +29,10 @@ function addDays(date, amount) {
 
 function daysBetween(start, end) {
   return Math.max(1, Math.round((new Date(`${end}T00:00:00`) - new Date(`${start}T00:00:00`)) / 86400000) + 1);
+}
+
+function formatDay(date) {
+  return fmtDate.format(new Date(`${date}T00:00:00`)).replace(".", "");
 }
 
 function aggregate(rows) {
@@ -46,8 +55,12 @@ function addRates(item) {
     cpm: item.impressions ? (item.spend / item.impressions) * 1000 : 0,
     ctr: item.impressions ? item.clicks / item.impressions : 0,
     cpc: item.clicks ? item.spend / item.clicks : 0,
+    cpv: item.pageViews ? item.spend / item.pageViews : 0,
     cpl: item.leads ? item.spend / item.leads : 0,
-    conversionRate: item.clicks ? item.leads / item.clicks : 0
+    connectRate: item.clicks ? item.pageViews / item.clicks : 0,
+    lpConversion: item.pageViews ? item.leads / item.pageViews : 0,
+    conversionRate: item.clicks ? item.leads / item.clicks : 0,
+    qualificationRate: item.totalLeads ? item.leads / item.totalLeads : 0
   };
 }
 
@@ -80,24 +93,35 @@ function delta(current, previous, lowerIsBetter = false) {
   const change = (current - previous) / Math.abs(previous);
   const positive = lowerIsBetter ? change < 0 : change > 0;
   return {
-    text: `${change >= 0 ? "+" : ""}${fmtPercent.format(change)} vs período anterior`,
+    value: change,
+    text: `${change >= 0 ? "+" : ""}${fmtPercent.format(change)} vs periodo anterior`,
+    short: `${change >= 0 ? "▲" : "▼"} ${fmtPercent.format(Math.abs(change))}`,
     className: positive ? "good" : "bad"
   };
 }
 
-function renderKpis() {
+function periodContext(tab = state.tab) {
   const start = $("#startDate").value;
   const end = $("#endDate").value;
   const span = daysBetween(start, end);
   const previousEnd = addDays(start, -1);
   const previousStart = addDays(previousEnd, -(span - 1));
-  const current = summarize(state.tab, start, end);
-  const previous = summarize(state.tab, previousStart, previousEnd);
+  return {
+    start,
+    end,
+    previousStart,
+    previousEnd,
+    current: summarize(tab, start, end),
+    previous: summarize(tab, previousStart, previousEnd)
+  };
+}
 
+function renderKpis() {
+  const { current, previous } = periodContext();
   const cards = [
     ["Investimento", fmtCurrency.format(current.spend), delta(current.spend, previous.spend, false)],
-    ["Leads tráfego", fmtNumber.format(current.trafficLeads), delta(current.trafficLeads, previous.trafficLeads, false)],
-    ["Custo por lead tráfego", current.cpl ? fmtCurrency.format(current.cpl) : "R$ 0,00", delta(current.cpl, previous.cpl, true)],
+    ["Leads trafego", fmtNumber.format(current.trafficLeads), delta(current.trafficLeads, previous.trafficLeads, false)],
+    ["Custo por lead trafego", current.cpl ? fmtCurrency.format(current.cpl) : "R$ 0,00", delta(current.cpl, previous.cpl, true)],
     ["Leads totais", fmtNumber.format(current.totalLeads), delta(current.totalLeads, previous.totalLeads, false)]
   ];
 
@@ -112,6 +136,134 @@ function renderKpis() {
     .join("");
 }
 
+function metricDelta(metric, lowerIsBetter = false) {
+  const { current, previous } = periodContext("all");
+  return delta(current[metric], previous[metric], lowerIsBetter);
+}
+
+function renderMetricRail() {
+  const { current } = periodContext("all");
+  const metrics = [
+    {
+      mainLabel: "Impressoes",
+      mainValue: fmtNumber.format(current.impressions),
+      sideLabel: "CPM",
+      sideValue: fmtCurrency.format(current.cpm),
+      subLabel: "CTR",
+      subValue: fmtPercent.format(current.ctr),
+      change: metricDelta("ctr")
+    },
+    {
+      mainLabel: "Link Clicks",
+      mainValue: fmtNumber.format(current.clicks),
+      sideLabel: "CPC",
+      sideValue: fmtCurrency.format(current.cpc),
+      subLabel: "CR (clique -> LP)",
+      subValue: fmtPercent.format(current.connectRate),
+      change: metricDelta("connectRate")
+    },
+    {
+      mainLabel: "Page Views",
+      mainValue: fmtNumber.format(current.pageViews),
+      sideLabel: "CPV",
+      sideValue: fmtCurrency.format(current.cpv),
+      subLabel: "Conversao LP",
+      subValue: fmtPercent.format(current.lpConversion),
+      change: metricDelta("lpConversion")
+    },
+    {
+      mainLabel: "Leads",
+      mainValue: fmtNumber.format(current.leads),
+      sideLabel: "CPL",
+      sideValue: fmtCurrency.format(current.cpl),
+      subLabel: "Taxa de qualificacao",
+      subValue: fmtPercent.format(current.qualificationRate),
+      change: metricDelta("qualificationRate")
+    }
+  ];
+
+  $("#metricRail").innerHTML = metrics
+    .map((item) => `
+      <article class="metricSplit">
+        <div class="metricMain">
+          <span>${item.mainLabel}</span>
+          <strong>${item.mainValue}</strong>
+        </div>
+        <div class="metricSide">
+          <span>${item.sideLabel}</span>
+          <strong>${item.sideValue}</strong>
+          <small>${item.subLabel}: ${item.subValue} <b class="${item.change.className}">${item.change.short}</b></small>
+        </div>
+      </article>
+    `)
+    .join("");
+}
+
+function dailySeries(tab = state.tab) {
+  const start = $("#startDate").value;
+  const end = $("#endDate").value;
+  const rows = getRows(tab, start, end);
+  const map = new Map();
+  rows.forEach((row) => {
+    if (!map.has(row.date)) map.set(row.date, []);
+    map.get(row.date).push(row);
+  });
+  return [...map.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, dayRows]) => addRates({ date, ...aggregate(dayRows) }));
+}
+
+function chartColor(index) {
+  return ["#3b8edb", "#ffd166", "#6ee7b7", "#f472b6"][index % 4];
+}
+
+function chartOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: "index", intersect: false },
+    plugins: { legend: { position: "bottom", labels: { color: "#dbe4ff" } } },
+    scales: {
+      x: { ticks: { color: "#9aa5c2" }, grid: { color: "rgba(255,255,255,.08)" } },
+      money: { beginAtZero: true, ticks: { color: "#9aa5c2", callback: (value) => fmtCurrency.format(value) }, grid: { color: "rgba(255,255,255,.08)" } },
+      count: { beginAtZero: true, position: "right", ticks: { color: "#9aa5c2" }, grid: { drawOnChartArea: false } }
+    }
+  };
+}
+
+function renderLineChart(canvasId, tab, chartKey) {
+  const series = dailySeries(tab);
+  const labels = series.map((item) => formatDay(item.date));
+  state.charts[chartKey]?.destroy();
+  state.charts[chartKey] = new Chart($(`#${canvasId}`), {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        { type: "bar", label: "Investimento", data: series.map((item) => item.spend), backgroundColor: chartColor(0), yAxisID: "money" },
+        { type: "line", label: "Leads", data: series.map((item) => item.leads), borderColor: chartColor(1), backgroundColor: chartColor(1), tension: 0.28, yAxisID: "count" }
+      ]
+    },
+    options: chartOptions()
+  });
+}
+
+function renderCplChart(canvasId, tab, chartKey) {
+  const series = dailySeries(tab);
+  const labels = series.map((item) => formatDay(item.date));
+  state.charts[chartKey]?.destroy();
+  state.charts[chartKey] = new Chart($(`#${canvasId}`), {
+    data: {
+      labels,
+      datasets: [
+        { type: "bar", label: "Investimento", data: series.map((item) => item.spend), backgroundColor: chartColor(0), yAxisID: "money" },
+        { type: "line", label: "CPL", data: series.map((item) => item.cpl), borderColor: chartColor(2), backgroundColor: chartColor(2), tension: 0.28, yAxisID: "count" }
+      ]
+    },
+    options: chartOptions()
+  });
+}
+
 function groupBy(rows, field) {
   const groups = new Map();
   rows.forEach((row) => {
@@ -124,80 +276,124 @@ function groupBy(rows, field) {
     .sort((a, b) => (a.cpl || Number.MAX_SAFE_INTEGER) - (b.cpl || Number.MAX_SAFE_INTEGER));
 }
 
-function dailySeries() {
-  const start = $("#startDate").value;
-  const end = $("#endDate").value;
-  const rows = getRows(state.tab, start, end);
-  const map = new Map();
-  rows.forEach((row) => {
-    if (!map.has(row.date)) map.set(row.date, []);
-    map.get(row.date).push(row);
-  });
-  return [...map.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, dayRows]) => addRates({ date, ...aggregate(dayRows) }));
+function heat(value, max, kind = "normal") {
+  if (!max) return "";
+  const p = Math.min(1, Math.max(0, value / max));
+  if (kind === "green") return `style="background-color: rgba(74, 222, 128, ${0.12 + p * 0.28})"`;
+  if (kind === "money") return `style="background-color: rgba(226, 232, 240, ${0.18 + p * 0.44})"`;
+  return `style="background-color: rgba(125, 140, 190, ${0.18 + p * 0.38})"`;
 }
 
-function chartColor(index) {
-  return ["#0f766e", "#2563eb", "#b45309", "#15803d"][index % 4];
+function renderDailyTable(tab = "all", targetId = "dailyTableBody", compact = false) {
+  const rows = dailySeries(tab).sort((a, b) => b.date.localeCompare(a.date));
+  const totals = addRates({ ...aggregate(rows) });
+  const max = {
+    spend: Math.max(...rows.map((row) => row.spend), 0),
+    leads: Math.max(...rows.map((row) => row.leads), 0),
+    cpl: Math.max(...rows.map((row) => row.cpl), 0),
+    cpm: Math.max(...rows.map((row) => row.cpm), 0),
+    cpc: Math.max(...rows.map((row) => row.cpc), 0),
+    ctr: Math.max(...rows.map((row) => row.ctr), 0)
+  };
+  const extra = compact ? "" : "";
+  $(`#${targetId}`).innerHTML = rows.length
+    ? `${rows.map((row) => `
+      <tr>
+        <td>${formatDay(row.date)}</td>
+        <td ${heat(row.spend, max.spend, "money")}>${fmtCurrency.format(row.spend)}</td>
+        <td ${heat(row.leads, max.leads)}>${fmtNumber.format(row.leads)}</td>
+        <td ${heat(row.cpl, max.cpl)}>${fmtCurrency.format(row.cpl)}</td>
+        <td ${heat(row.cpm, max.cpm)}>${fmtCurrency.format(row.cpm)}</td>
+        <td ${heat(row.cpc, max.cpc, "money")}>${fmtCurrency.format(row.cpc)}</td>
+        <td ${heat(row.ctr, max.ctr, "green")}>${fmtPercent.format(row.ctr)}</td>
+        ${extra}
+      </tr>
+    `).join("")}
+    <tr class="totalRow">
+      <td>Total geral</td>
+      <td>${fmtCurrency.format(totals.spend)}</td>
+      <td>${fmtNumber.format(totals.leads)}</td>
+      <td>${fmtCurrency.format(totals.cpl)}</td>
+      <td>${fmtCurrency.format(totals.cpm)}</td>
+      <td>${fmtCurrency.format(totals.cpc)}</td>
+      <td>${fmtPercent.format(totals.ctr)}</td>
+    </tr>`
+    : `<tr><td class="empty" colspan="7">Nenhum dado encontrado para o periodo selecionado.</td></tr>`;
 }
 
-function renderCharts() {
-  const series = dailySeries();
-  const labels = series.map((item) => item.date.split("-").reverse().join("/"));
-  const dailyCtx = $("#dailyChart");
-  const efficiencyCtx = $("#efficiencyChart");
+function platformCard(label, value, target, percent, good) {
+  const clamped = Math.max(0, Math.min(100, percent));
+  return `
+    <article class="goalCard">
+      <span>${label}</span>
+      <strong>${value}</strong>
+      <small class="${good ? "good" : "bad"}">${fmtPercent.format(percent / 100)}</small>
+      <div class="progress"><i style="width:${clamped}%"></i></div>
+      <b>Meta: ${target}</b>
+    </article>
+  `;
+}
 
-  state.charts.daily?.destroy();
-  state.charts.efficiency?.destroy();
+function renderPlatformResults() {
+  const blocks = ["meta", "google"].map((tab) => {
+    const label = tab === "meta" ? "Meta Ads" : "Google Ads";
+    const title = `Resultado ${label}`;
+    const target = TARGETS[tab];
+    const { current } = periodContext(tab);
+    const spendPct = target.spend ? (current.spend / target.spend) * 100 : 0;
+    const leadsPct = target.leads ? (current.leads / target.leads) * 100 : 0;
+    const cplPct = target.cpl && current.cpl ? ((current.cpl - target.cpl) / target.cpl) * 100 : 0;
+    const canvasA = `${tab}ResultChart`;
+    const canvasB = `${tab}ResultCplChart`;
+    const tableId = `${tab}ResultTable`;
+    return `
+      <section class="platformBlock">
+        <h2>${title}</h2>
+        <div class="resultGrid">
+          <div class="goalGrid">
+            ${platformCard(tab === "meta" ? "Investimento c/ Imposto" : "Investimento", fmtCurrency.format(current.spend), fmtCurrency.format(target.spend), spendPct, spendPct >= 100)}
+            ${platformCard("Leads Captados", fmtNumber.format(current.leads), fmtNumber.format(target.leads), leadsPct, leadsPct >= 100)}
+            ${platformCard("Custo por Lead", fmtCurrency.format(current.cpl), fmtCurrency.format(target.cpl), Math.abs(cplPct), cplPct <= 0)}
+          </div>
+          <div class="panel darkPanel">
+            <canvas id="${canvasA}" height="250"></canvas>
+          </div>
+        </div>
+        <div class="panel tablePanel darkTablePanel">
+          <div class="tableWrap">
+            <table class="dailyTable">
+              <thead>
+                <tr>
+                  <th>Dia</th>
+                  <th>${tab === "meta" ? "Investimento c/ Imp." : "Investimento"}</th>
+                  <th>Leads</th>
+                  <th>CPL</th>
+                  <th>CPM</th>
+                  <th>CPC</th>
+                  <th>CTR</th>
+                </tr>
+              </thead>
+              <tbody id="${tableId}"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    `;
+  }).join("");
 
-  state.charts.daily = new Chart(dailyCtx, {
-    type: "bar",
-    data: {
-      labels,
-      datasets: [
-        { type: "bar", label: "Investimento", data: series.map((item) => item.spend), backgroundColor: chartColor(0), yAxisID: "money" },
-        { type: "line", label: "Leads", data: series.map((item) => item.leads), borderColor: chartColor(1), backgroundColor: chartColor(1), tension: 0.3, yAxisID: "count" }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: "index", intersect: false },
-      plugins: { legend: { position: "bottom" } },
-      scales: {
-        money: { beginAtZero: true, ticks: { callback: (value) => fmtCurrency.format(value) } },
-        count: { beginAtZero: true, position: "right", grid: { drawOnChartArea: false } }
-      }
-    }
-  });
-
-  const summary = summarize(state.tab, $("#startDate").value, $("#endDate").value);
-  state.charts.efficiency = new Chart(efficiencyCtx, {
-    type: "bar",
-    data: {
-      labels: ["CPM", "CTR", "CPC", "CPL", "Conv."],
-      datasets: [{
-        label: "Métricas",
-        data: [summary.cpm, summary.ctr * 100, summary.cpc, summary.cpl, summary.conversionRate * 100],
-        backgroundColor: [chartColor(0), chartColor(1), chartColor(2), chartColor(3), "#64748b"]
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true } }
-    }
+  $("#platformResults").innerHTML = blocks;
+  ["meta", "google"].forEach((tab) => {
+    renderLineChart(`${tab}ResultChart`, tab, `${tab}ResultChart`);
+    renderDailyTable(tab, `${tab}ResultTable`, true);
   });
 }
 
-function renderTable() {
-  const labels = { campaign: "campanha", adset: "conjunto", ad: "anúncio" };
+function renderOptimizationTable() {
+  const labels = { campaign: "campanha", adset: "conjunto", ad: "anuncio" };
   const start = $("#startDate").value;
   const end = $("#endDate").value;
   const rows = groupBy(getRows(state.tab, start, end), state.table);
-  $("#tableTitle").textContent = `Otimização por ${labels[state.table]}`;
+  $("#tableTitle").textContent = `Otimizacao por ${labels[state.table]}`;
   $("#tableBody").innerHTML = rows.length
     ? rows.map((row) => `
       <tr>
@@ -213,13 +409,31 @@ function renderTable() {
         <td>${fmtPercent.format(row.conversionRate)}</td>
       </tr>
     `).join("")
-    : `<tr><td class="empty" colspan="10">Nenhum dado encontrado para o período selecionado.</td></tr>`;
+    : `<tr><td class="empty" colspan="10">Nenhum dado encontrado para o periodo selecionado.</td></tr>`;
+}
+
+function renderGeneral() {
+  $("#generalView").hidden = false;
+  $("#platformView").hidden = true;
+  renderLineChart("dailyChart", "all", "daily");
+  renderCplChart("cplChart", "all", "cpl");
+  renderMetricRail();
+  renderDailyTable("all");
+  renderPlatformResults();
+}
+
+function renderPlatform() {
+  $("#generalView").hidden = true;
+  $("#platformView").hidden = false;
+  renderLineChart("platformDailyChart", state.tab, "platformDaily");
+  renderCplChart("platformCplChart", state.tab, "platformCpl");
+  renderOptimizationTable();
 }
 
 function render() {
   renderKpis();
-  renderCharts();
-  renderTable();
+  if (state.tab === "all") renderGeneral();
+  else renderPlatform();
 }
 
 function setRange(days) {
@@ -250,14 +464,14 @@ function bindEvents() {
     button.addEventListener("click", () => {
       $$(".tableNav button").forEach((item) => item.classList.toggle("active", item === button));
       state.table = button.dataset.table;
-      renderTable();
+      renderOptimizationTable();
     });
   });
 }
 
 async function load(force = false) {
   const response = await fetch(`./data.json?v=${force ? Date.now() : "initial"}`, { cache: "no-store" });
-  if (!response.ok) throw new Error("Não foi possível carregar data.json");
+  if (!response.ok) throw new Error("Nao foi possivel carregar data.json");
   state.data = await response.json();
   $("#updatedAt").textContent = `Atualizado em ${new Date(state.data.generatedAt).toLocaleString("pt-BR")}`;
   if (!$("#startDate").value || !$("#endDate").value) setRange(30);
