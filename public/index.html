@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="pragma" content="no-cache" />
+    <meta http-equiv="expires" content="0" />
+    <title>Funil de Tráfego L20</title>
+    <link rel="stylesheet" href="./styles.css?v=20260702" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Dashboard de performance</p>
+          <h1>Funil de Tráfego L20</h1>
+        </div>
+        <div class="status">
+          <span id="updatedAt">Atualizando...</span>
+          <button id="refreshButton" type="button" title="Atualizar dados">↻</button>
+        </div>
+      </header>
+
+      <section class="controls" aria-label="Filtros">
+        <div class="field">
+          <label for="startDate">Início</label>
+          <input id="startDate" type="date" />
+        </div>
+        <div class="field">
+          <label for="endDate">Fim</label>
+          <input id="endDate" type="date" />
+        </div>
+        <div class="quick">
+          <button type="button" data-range="7">7 dias</button>
+          <button type="button" data-range="30">30 dias</button>
+          <button type="button" data-range="90">90 dias</button>
+          <button type="button" data-range="all">Tudo</button>
+        </div>
+      </section>
+
+      <nav class="tabs" aria-label="Abas">
+        <button type="button" class="active" data-tab="all">Geral</button>
+        <button type="button" data-tab="meta">Meta Ads</button>
+        <button type="button" data-tab="google">Google Ads</button>
+      </nav>
+
+      <section class="kpis" id="kpis"></section>
+
+      <section class="charts">
+        <div class="panel">
+          <div class="panelHeader">
+            <h2>Investimento e leads por dia</h2>
+          </div>
+          <canvas id="dailyChart" height="260"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panelHeader">
+            <h2>Eficiência do período</h2>
+          </div>
+          <canvas id="efficiencyChart" height="260"></canvas>
+        </div>
+      </section>
+
+      <section class="tables">
+        <div class="tableNav">
+          <button type="button" class="active" data-table="campaign">Campanhas</button>
+          <button type="button" data-table="adset">Conjuntos</button>
+          <button type="button" data-table="ad">Anúncios</button>
+        </div>
+        <div class="panel tablePanel">
+          <div class="panelHeader">
+            <h2 id="tableTitle">Otimização por campanha</h2>
+            <span id="tableHint">Ordenado pelo menor CPL</span>
+          </div>
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Investimento</th>
+                  <th>Impressões</th>
+                  <th>Cliques</th>
+                  <th>Leads</th>
+                  <th>CPM</th>
+                  <th>CTR</th>
+                  <th>CPC</th>
+                  <th>CPL</th>
+                  <th>Conv.</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+    <script src="./app.js?v=20260702"></script>
+  </body>
+</html>
