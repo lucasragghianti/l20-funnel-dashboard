@@ -116,6 +116,28 @@ function getTotalLeads(tab, start, end) {
   }).length;
 }
 
+function getAllLeadsInRange(start = $("#startDate").value, end = $("#endDate").value) {
+  return state.data.leads.filter((lead) => inRange(lead, start, end));
+}
+
+function getGroupEntriesInRange(start = $("#startDate").value, end = $("#endDate").value) {
+  return (state.data.groupEntries || []).filter((entry) => inRange(entry, start, end));
+}
+
+function normalizeLabel(value, fallback) {
+  const label = String(value || "").trim();
+  return label || fallback;
+}
+
+function groupEntrySummary() {
+  const leads = getAllLeadsInRange();
+  const entries = getGroupEntriesInRange();
+  const entered = entries.reduce((sum, entry) => sum + (entry.entered || 0), 0);
+  const left = entries.reduce((sum, entry) => sum + (entry.left || 0), 0);
+  const rate = leads.length ? entered / leads.length : 0;
+  return { leads: leads.length, entered, left, rate };
+}
+
 function summarize(tab, start, end) {
   const rows = getRows(tab, start, end);
   const leads = getLeads(tab, start, end);
@@ -260,6 +282,18 @@ function chartOptions() {
   };
 }
 
+function leadChartOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: "bottom", labels: { color: "#dbe4ff" } } },
+    scales: {
+      x: { ticks: { color: "#9aa5c2" }, grid: { color: "rgba(255,255,255,.08)" } },
+      y: { beginAtZero: true, ticks: { color: "#9aa5c2", precision: 0 }, grid: { color: "rgba(255,255,255,.08)" } }
+    }
+  };
+}
+
 function renderLineChart(canvasId, tab, chartKey, rowsOverride = null) {
   const series = dailySeries(tab, rowsOverride);
   const labels = series.map((item) => formatDay(item.date));
@@ -306,6 +340,74 @@ function renderLeadCplChart(canvasId, tab, chartKey, rowsOverride = null) {
       ]
     },
     options: chartOptions()
+  });
+}
+
+function renderGroupStats() {
+  const summary = groupEntrySummary();
+  const goal = 0.8;
+  $("#groupStats").innerHTML = `
+    <article class="groupStatCard">
+      <span>Em grupos</span>
+      <strong>${fmtNumber.format(summary.entered)}</strong>
+      <small>${fmtNumber.format(summary.leads)} leads no periodo</small>
+    </article>
+    <article class="groupStatCard">
+      <span>Tx. Entrada</span>
+      <strong>${fmtPercent.format(summary.rate)}</strong>
+      <small>Meta: ${fmtPercent.format(goal)}</small>
+    </article>
+  `;
+}
+
+function renderLeadSourceChart() {
+  const leads = getAllLeadsInRange();
+  const groups = new Map();
+  leads.forEach((lead) => {
+    const key = normalizeLabel(lead.rawSource, "Sem utm_source");
+    groups.set(key, (groups.get(key) || 0) + 1);
+  });
+  const rows = [...groups.entries()].sort((a, b) => b[1] - a[1]);
+  state.charts.leadSource?.destroy();
+  state.charts.leadSource = new Chart($("#leadSourceChart"), {
+    type: "bar",
+    data: {
+      labels: rows.map(([name]) => name),
+      datasets: [{
+        label: "Leads",
+        data: rows.map(([, count]) => count),
+        backgroundColor: rows.map((_, index) => chartColor(index))
+      }]
+    },
+    options: leadChartOptions()
+  });
+}
+
+function renderLeadMediumDailyChart() {
+  const leads = getAllLeadsInRange();
+  const dates = [...new Set(leads.map((lead) => lead.date))].sort();
+  const mediumTotals = new Map();
+  leads.forEach((lead) => {
+    const medium = normalizeLabel(lead.rawMedium, "Sem utm_medium");
+    mediumTotals.set(medium, (mediumTotals.get(medium) || 0) + 1);
+  });
+  const mediums = [...mediumTotals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 7).map(([name]) => name);
+  const countFor = (date, medium) => leads.filter((lead) => lead.date === date && normalizeLabel(lead.rawMedium, "Sem utm_medium") === medium).length;
+
+  state.charts.leadMediumDaily?.destroy();
+  state.charts.leadMediumDaily = new Chart($("#leadMediumDailyChart"), {
+    type: "line",
+    data: {
+      labels: dates.map(formatDay),
+      datasets: mediums.map((medium, index) => ({
+        label: medium,
+        data: dates.map((date) => countFor(date, medium)),
+        borderColor: chartColor(index),
+        backgroundColor: chartColor(index),
+        tension: 0.28
+      }))
+    },
+    options: leadChartOptions()
   });
 }
 
@@ -537,6 +639,9 @@ function renderOptimizationTable() {
 function renderGeneral() {
   $("#generalView").hidden = false;
   $("#platformView").hidden = true;
+  renderGroupStats();
+  renderLeadSourceChart();
+  renderLeadMediumDailyChart();
   renderLineChart("dailyChart", "all", "daily");
   renderCplChart("cplChart", "all", "cpl");
   renderMetricRail();
