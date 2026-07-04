@@ -94,6 +94,7 @@ h2 {
 .controls,
 .tabs,
 .kpis,
+.leadIntelGrid,
 .overviewGrid,
 .singleChart,
 .tablePanel,
@@ -216,6 +217,54 @@ h2 {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.85fr);
   gap: 14px;
+}
+
+.leadIntelGrid {
+  display: grid;
+  grid-template-columns: minmax(330px, 0.7fr) minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 14px;
+}
+
+.groupStats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  overflow: hidden;
+  min-height: 180px;
+  border: 1px solid rgba(59, 142, 219, 0.32);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(0, 84, 125, 0.62), rgba(17, 26, 58, 0.98));
+  box-shadow: var(--shadow);
+}
+
+.groupStatCard {
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  padding: 22px;
+}
+
+.groupStatCard + .groupStatCard {
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.groupStatCard span {
+  color: #f4f7ff;
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
+.groupStatCard strong {
+  color: #fff;
+  font-size: clamp(2.3rem, 4vw, 4rem);
+  font-weight: 500;
+  line-height: 1;
+}
+
+.groupStatCard small {
+  color: #d7def8;
+  font-size: 0.84rem;
+  font-weight: 800;
 }
 
 .charts,
@@ -499,6 +548,7 @@ td:not(:first-child) {
 
 @media (max-width: 1120px) {
   .overviewGrid,
+  .leadIntelGrid,
   .charts,
   .resultGrid,
   .goalGrid {
@@ -537,5 +587,14 @@ td:not(:first-child) {
 
   .metricSplit {
     grid-template-columns: 1fr;
+  }
+
+  .groupStats {
+    grid-template-columns: 1fr;
+  }
+
+  .groupStatCard + .groupStatCard {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-left: 0;
   }
 }
