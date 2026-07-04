@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 
 const ADS_SHEET_ID = "1-EE1jMwW3-p1Peq9gVMoydSVSpSXM0UHeCpjOZlI2No";
 const LEADS_SHEET_ID = "1nZjONwwL9HGSw2lXjfLjIjEMCzsuS9gykYpp20SKfP0";
+const GROUPS_SHEET_ID = "1ap-pQe_To4UgEYx7v6KbCB4Ba-i8vDRQ6f-NiUI2q6A";
 const META_TAX = 1.1385;
 
 const SOURCES = [
@@ -28,6 +29,10 @@ const LEADS_SOURCE = {
   sheetName: "Leads"
 };
 
+const GROUPS_SOURCE = {
+  sheetId: GROUPS_SHEET_ID
+};
+
 const FIELD_ALIASES = {
   date: ["date", "data", "dia", "day", "created", "created_at", "data_criacao", "data de criação", "timestamp"],
   spend: ["spend", "gasto", "cost", "custo", "valor gasto", "amount_spent", "investimento", "valor investido"],
@@ -39,10 +44,14 @@ const FIELD_ALIASES = {
   ad: ["ad", "anuncio", "anúncio", "ad_name", "nome do anuncio", "nome do anúncio", "utm_term", "creative"],
   source: ["source", "utm_source", "origem", "plataforma", "traffic_source", "fonte"],
   medium: ["medium", "utm_medium", "midia", "mídia"],
-  url: ["url", "page url", "landing page", "pagina", "página"]
+  url: ["url", "page url", "landing page", "pagina", "página"],
+  entered: ["entrou", "entraram", "entrada", "em grupos"],
+  left: ["saiu", "sairam", "saíram", "saida", "saída"],
+  total: ["total"]
 };
 
 function csvUrl(sheetId, sheetName) {
+  if (!sheetName) return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
   const sheet = encodeURIComponent(sheetName);
   return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${sheet}`;
 }
@@ -203,12 +212,25 @@ function sourceFromLead(row) {
 }
 
 function makeLeadRow(raw) {
+  const rawSource = String(pickLead(raw, "source", "utm_source")).trim();
+  const rawMedium = String(pickLead(raw, "medium", "utm_medium")).trim();
   return {
     date: parseDate(pick(raw, "date")),
     source: sourceFromLead(raw),
+    rawSource,
+    rawMedium,
     campaign: String(pickLead(raw, "campaign", "utm_campaign")).trim(),
     adset: String(pickLead(raw, "adset", "utm_content")).trim(),
     ad: String(pickLead(raw, "ad", "utm_term")).trim()
+  };
+}
+
+function makeGroupEntryRow(raw) {
+  return {
+    date: parseDate(pick(raw, "date")),
+    entered: parseNumber(pick(raw, "entered")),
+    left: parseNumber(pick(raw, "left")),
+    total: parseNumber(pick(raw, "total"))
   };
 }
 
@@ -318,6 +340,8 @@ async function main() {
 
   const leadsCsv = await fetchCsv(LEADS_SOURCE);
   const leads = mapRows(leadsCsv).map(makeLeadRow).filter((row) => row.date);
+  const groupsCsv = await fetchCsv(GROUPS_SOURCE);
+  const groupEntries = mapRows(groupsCsv).map(makeGroupEntryRow).filter((row) => row.date);
   const rows = attachLeads(ads, leads);
 
   const payload = {
@@ -330,6 +354,7 @@ async function main() {
     dateRange: getDateRange([...rows, ...leads]),
     rows,
     leads,
+    groupEntries,
     summary: {
       all: addRates({ totalLeads: leads.length, ...aggregate(rows) }),
       meta: addRates({ totalLeads: leads.filter((lead) => lead.source === "meta").length, ...aggregate(rows.filter((row) => row.source === "meta")) }),
