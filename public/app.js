@@ -300,8 +300,61 @@ function dailySeries(tab = state.tab, rowsOverride = null) {
 }
 
 function chartColor(index) {
-  return ["#3b8edb", "#ffd166", "#6ee7b7", "#f472b6"][index % 4];
+  return ["#13b8c9", "#f20587", "#ff7a00", "#ffb000", "#8a7f12", "#f8f8ff", "#767c98", "#3b8edb", "#6ee7b7", "#f472b6"][index % 10];
 }
+
+const pointValueLabelPlugin = {
+  id: "pointValueLabels",
+  afterDatasetsDraw(chart, args, options) {
+    const { ctx } = chart;
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.font = "700 11px Inter, sans-serif";
+    ctx.fillStyle = options?.color || "#ffffff";
+    chart.data.datasets.forEach((dataset, datasetIndex) => {
+      const meta = chart.getDatasetMeta(datasetIndex);
+      if (meta.hidden) return;
+      meta.data.forEach((point, index) => {
+        const value = dataset.data[index];
+        if (value === null || value === undefined || value === 0) return;
+        const label = options?.formatter ? options.formatter(value) : fmtNumber.format(value);
+        ctx.fillText(label, point.x, point.y - 8);
+      });
+    });
+    ctx.restore();
+  }
+};
+
+const stackedTotalLabelPlugin = {
+  id: "stackedTotalLabels",
+  afterDatasetsDraw(chart, args, options) {
+    const { ctx, data } = chart;
+    if (!data.datasets.length) return;
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.font = "700 11px Inter, sans-serif";
+    ctx.fillStyle = options?.color || "#ffffff";
+    data.labels.forEach((label, index) => {
+      let total = 0;
+      let topY = Number.POSITIVE_INFINITY;
+      let x = null;
+      data.datasets.forEach((dataset, datasetIndex) => {
+        const value = Number(dataset.data[index] || 0);
+        if (!value) return;
+        const meta = chart.getDatasetMeta(datasetIndex);
+        const bar = meta.data[index];
+        if (!bar || meta.hidden) return;
+        total += value;
+        topY = Math.min(topY, bar.y);
+        x = bar.x;
+      });
+      if (total && x !== null) ctx.fillText(fmtNumber.format(total), x, topY - 6);
+    });
+    ctx.restore();
+  }
+};
 
 function chartOptions() {
   return {
@@ -350,6 +403,25 @@ function horizontalPercentOptions() {
         grid: { color: "rgba(255,255,255,.08)" }
       },
       y: { ticks: { color: "#dbe4ff" }, grid: { color: "rgba(255,255,255,.06)" } }
+    }
+  };
+}
+
+function percentLineOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: "top", labels: { color: "#dbe4ff" } },
+      pointValueLabels: { color: "#ffd400", formatter: (value) => fmtPercent.format(value) }
+    },
+    scales: {
+      x: { ticks: { color: "#9aa5c2" }, grid: { color: "rgba(255,255,255,.08)" } },
+      y: {
+        beginAtZero: true,
+        ticks: { color: "#9aa5c2", callback: (value) => fmtPercent.format(value) },
+        grid: { color: "rgba(255,255,255,.08)" }
+      }
     }
   };
 }
@@ -473,7 +545,7 @@ function renderGroupEntryRateChart() {
   const leads = getAllLeadsInRange();
   const leadDates = [...new Set(leads.map((lead) => lead.date))];
   const groupDates = (state.data.groupEntries || []).map((entry) => entry.date);
-  const dates = [...new Set([...leadDates, ...groupDates])].filter(Boolean).sort().reverse();
+  const dates = [...new Set([...leadDates, ...groupDates])].filter(Boolean).sort();
   const entriesByDate = new Map((state.data.groupEntries || []).map((entry) => [entry.date, entry]));
   const leadCount = (date) => leads.filter((lead) => lead.date === date).length;
   const rateFor = (date) => {
@@ -484,16 +556,21 @@ function renderGroupEntryRateChart() {
 
   state.charts.groupEntryRate?.destroy();
   state.charts.groupEntryRate = new Chart($("#groupEntryRateChart"), {
-    type: "bar",
+    type: "line",
     data: {
       labels: dates.map(formatDay),
       datasets: [{
-        label: "Taxa de entrada",
+        label: "% Entrada",
         data: dates.map(rateFor),
-        backgroundColor: "#6ee7b7"
+        borderColor: "#ffd400",
+        backgroundColor: "#ffd400",
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        tension: 0.22
       }]
     },
-    options: horizontalPercentOptions()
+    options: percentLineOptions(),
+    plugins: [pointValueLabelPlugin]
   });
 }
 
@@ -677,6 +754,30 @@ function countBy(items, keyFn) {
   return [...groups.entries()].sort((a, b) => b[1] - a[1]);
 }
 
+function dailyStackData(leads, dimensionFn, maxDimensions = 10) {
+  const dates = [...new Set(leads.map((lead) => lead.date))].filter(Boolean).sort();
+  const totals = countBy(leads, dimensionFn);
+  const top = totals.slice(0, maxDimensions).map(([name]) => name);
+  const hasOther = totals.length > maxDimensions;
+  const dimensions = hasOther ? [...top, "Outros"] : top;
+  const dimensionFor = (lead) => {
+    const value = dimensionFn(lead);
+    return top.includes(value) ? value : "Outros";
+  };
+  const countFor = (date, dimension) => leads.filter((lead) => lead.date === date && dimensionFor(lead) === dimension).length;
+
+  return {
+    dates,
+    dimensions,
+    datasets: dimensions.map((dimension, index) => ({
+      label: dimension,
+      data: dates.map((date) => countFor(date, dimension)),
+      backgroundColor: chartColor(index),
+      stack: "leads"
+    }))
+  };
+}
+
 function renderOrganicCounter() {
   const leads = getOrganicLeads();
   const target = 40000;
@@ -709,24 +810,34 @@ function renderOrganicTemporalChart() {
         tension: 0.22
       }]
     },
-    options: leadChartOptions()
+    options: {
+      ...leadChartOptions(),
+      plugins: {
+        legend: { position: "bottom", labels: { color: "#dbe4ff" } },
+        pointValueLabels: { color: "#ffffff" }
+      }
+    },
+    plugins: [pointValueLabelPlugin]
   });
 }
 
 function renderOrganicSourceChart() {
-  const rows = countBy(getOrganicLeads(), (lead) => normalizeLabel(lead.rawSource, "Sem utm_source"));
+  const stack = dailyStackData(getOrganicLeads(), (lead) => normalizeLabel(lead.rawSource, "Sem utm_source"));
   state.charts.organicSource?.destroy();
   state.charts.organicSource = new Chart($("#organicSourceChart"), {
     type: "bar",
     data: {
-      labels: rows.map(([name]) => name),
-      datasets: [{
-        label: "Leads orgânicos",
-        data: rows.map(([, count]) => count),
-        backgroundColor: rows.map((_, index) => chartColor(index + 2))
-      }]
+      labels: stack.dates.map(formatDay),
+      datasets: stack.datasets
     },
-    options: leadChartOptions()
+    options: {
+      ...stackedBarOptions(),
+      plugins: {
+        legend: { position: "top", labels: { color: "#dbe4ff" } },
+        stackedTotalLabels: { color: "#ffffff" }
+      }
+    },
+    plugins: [stackedTotalLabelPlugin]
   });
 }
 
@@ -746,19 +857,22 @@ function renderOrganicTable() {
 
 function renderOrganicInstagramChart() {
   const leads = getOrganicLeads().filter((lead) => normalizeToken(lead.rawSource).includes("instagram"));
-  const rows = countBy(leads, (lead) => normalizeLabel(lead.rawTerm, "Sem utm_term"));
+  const stack = dailyStackData(leads, (lead) => normalizeLabel(lead.rawTerm, "Sem utm_term"));
   state.charts.organicInstagram?.destroy();
   state.charts.organicInstagram = new Chart($("#organicInstagramChart"), {
     type: "bar",
     data: {
-      labels: rows.map(([name]) => name),
-      datasets: [{
-        label: "Leads Instagram",
-        data: rows.map(([, count]) => count),
-        backgroundColor: rows.map((_, index) => chartColor(index))
-      }]
+      labels: stack.dates.map(formatDay),
+      datasets: stack.datasets
     },
-    options: leadChartOptions()
+    options: {
+      ...stackedBarOptions(),
+      plugins: {
+        legend: { position: "top", labels: { color: "#dbe4ff" } },
+        stackedTotalLabels: { color: "#ffffff" }
+      }
+    },
+    plugins: [stackedTotalLabelPlugin]
   });
 }
 
