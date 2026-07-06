@@ -129,6 +129,30 @@ function normalizeLabel(value, fallback) {
   return label || fallback;
 }
 
+function normalizeToken(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function leadHasMedium(lead, medium) {
+  return normalizeToken(lead.rawMedium) === normalizeToken(medium);
+}
+
+function getTrafficLeads(tab = "all", start = $("#startDate").value, end = $("#endDate").value) {
+  return state.data.leads.filter((lead) => {
+    const sourceOk = tab === "all" ? true : lead.source === tab;
+    return sourceOk && inRange(lead, start, end) && leadHasMedium(lead, "trafego-pago");
+  });
+}
+
+function getOrganicLeads(start = $("#startDate").value, end = $("#endDate").value) {
+  return state.data.leads.filter((lead) => inRange(lead, start, end) && leadHasMedium(lead, "organico"));
+}
+
 function groupEntrySummary() {
   const leads = getAllLeadsInRange();
   const entries = getGroupEntriesInRange();
@@ -140,8 +164,11 @@ function groupEntrySummary() {
 
 function summarize(tab, start, end) {
   const rows = getRows(tab, start, end);
-  const leads = getLeads(tab, start, end);
-  return addRates({ ...aggregate(rows), trafficLeads: leads.length, totalLeads: getTotalLeads(tab, start, end) });
+  const leads = tab === "all" ? getTrafficLeads(tab, start, end) : getLeads(tab, start, end);
+  const summary = addRates({ ...aggregate(rows), trafficLeads: leads.length, totalLeads: getTotalLeads(tab, start, end) });
+  summary.leads = leads.length;
+  summary.cpl = leads.length ? summary.spend / leads.length : 0;
+  return summary;
 }
 
 function delta(current, previous, lowerIsBetter = false) {
@@ -261,7 +288,15 @@ function dailySeries(tab = state.tab, rowsOverride = null) {
   });
   return [...map.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, dayRows]) => addRates({ date, ...aggregate(dayRows) }));
+    .map(([date, dayRows]) => {
+      const item = addRates({ date, ...aggregate(dayRows) });
+      if (!rowsOverride && tab === "all") {
+        const trafficLeads = getTrafficLeads(tab, date, date).length;
+        item.leads = trafficLeads;
+        item.cpl = trafficLeads ? item.spend / trafficLeads : 0;
+      }
+      return item;
+    });
 }
 
 function chartColor(index) {
@@ -290,6 +325,31 @@ function leadChartOptions() {
     scales: {
       x: { ticks: { color: "#9aa5c2" }, grid: { color: "rgba(255,255,255,.08)" } },
       y: { beginAtZero: true, ticks: { color: "#9aa5c2", precision: 0 }, grid: { color: "rgba(255,255,255,.08)" } }
+    }
+  };
+}
+
+function stackedBarOptions() {
+  const options = leadChartOptions();
+  options.scales.x.stacked = true;
+  options.scales.y.stacked = true;
+  return options;
+}
+
+function horizontalPercentOptions() {
+  return {
+    indexAxis: "y",
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: {
+        beginAtZero: true,
+        max: 1,
+        ticks: { color: "#9aa5c2", callback: (value) => fmtPercent.format(value) },
+        grid: { color: "rgba(255,255,255,.08)" }
+      },
+      y: { ticks: { color: "#dbe4ff" }, grid: { color: "rgba(255,255,255,.06)" } }
     }
   };
 }
@@ -396,18 +456,44 @@ function renderLeadMediumDailyChart() {
 
   state.charts.leadMediumDaily?.destroy();
   state.charts.leadMediumDaily = new Chart($("#leadMediumDailyChart"), {
-    type: "line",
+    type: "bar",
     data: {
       labels: dates.map(formatDay),
       datasets: mediums.map((medium, index) => ({
         label: medium,
         data: dates.map((date) => countFor(date, medium)),
-        borderColor: chartColor(index),
-        backgroundColor: chartColor(index),
-        tension: 0.28
+        backgroundColor: chartColor(index)
       }))
     },
-    options: leadChartOptions()
+    options: stackedBarOptions()
+  });
+}
+
+function renderGroupEntryRateChart() {
+  const leads = getAllLeadsInRange();
+  const leadDates = [...new Set(leads.map((lead) => lead.date))];
+  const groupDates = (state.data.groupEntries || []).map((entry) => entry.date);
+  const dates = [...new Set([...leadDates, ...groupDates])].filter(Boolean).sort().reverse();
+  const entriesByDate = new Map((state.data.groupEntries || []).map((entry) => [entry.date, entry]));
+  const leadCount = (date) => leads.filter((lead) => lead.date === date).length;
+  const rateFor = (date) => {
+    const total = leadCount(date);
+    const entered = entriesByDate.get(date)?.entered || 0;
+    return total ? entered / total : 0;
+  };
+
+  state.charts.groupEntryRate?.destroy();
+  state.charts.groupEntryRate = new Chart($("#groupEntryRateChart"), {
+    type: "bar",
+    data: {
+      labels: dates.map(formatDay),
+      datasets: [{
+        label: "Taxa de entrada",
+        data: dates.map(rateFor),
+        backgroundColor: "#6ee7b7"
+      }]
+    },
+    options: horizontalPercentOptions()
   });
 }
 
@@ -582,6 +668,100 @@ function renderPlatformResults() {
   });
 }
 
+function countBy(items, keyFn) {
+  const groups = new Map();
+  items.forEach((item) => {
+    const key = keyFn(item);
+    groups.set(key, (groups.get(key) || 0) + 1);
+  });
+  return [...groups.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+function renderOrganicCounter() {
+  const leads = getOrganicLeads();
+  const target = 40000;
+  const percent = target ? (leads.length / target) * 100 : 0;
+  $("#organicCounter").innerHTML = `
+    <article class="goalCard">
+      <span>Leads Orgânico</span>
+      <strong>${fmtNumber.format(leads.length)}</strong>
+      <small class="${percent >= 100 ? "good" : "bad"}">${fmtPercent.format(percent / 100)}</small>
+      <div class="progress"><i style="width:${Math.min(100, percent)}%"></i></div>
+      <b>Meta: ${fmtNumber.format(target)}</b>
+    </article>
+  `;
+}
+
+function renderOrganicTemporalChart() {
+  const leads = getOrganicLeads();
+  const dates = [...new Set(leads.map((lead) => lead.date))].sort();
+  const countFor = (date) => leads.filter((lead) => lead.date === date).length;
+  state.charts.organicTemporal?.destroy();
+  state.charts.organicTemporal = new Chart($("#organicTemporalChart"), {
+    type: "line",
+    data: {
+      labels: dates.map(formatDay),
+      datasets: [{
+        label: "Leads orgânicos",
+        data: dates.map(countFor),
+        borderColor: "#ffffff",
+        backgroundColor: "#ffffff",
+        tension: 0.22
+      }]
+    },
+    options: leadChartOptions()
+  });
+}
+
+function renderOrganicSourceChart() {
+  const rows = countBy(getOrganicLeads(), (lead) => normalizeLabel(lead.rawSource, "Sem utm_source"));
+  state.charts.organicSource?.destroy();
+  state.charts.organicSource = new Chart($("#organicSourceChart"), {
+    type: "bar",
+    data: {
+      labels: rows.map(([name]) => name),
+      datasets: [{
+        label: "Leads orgânicos",
+        data: rows.map(([, count]) => count),
+        backgroundColor: rows.map((_, index) => chartColor(index + 2))
+      }]
+    },
+    options: leadChartOptions()
+  });
+}
+
+function renderOrganicTable() {
+  const rows = countBy(getOrganicLeads(), (lead) => {
+    const source = normalizeLabel(lead.rawSource, "Sem utm_source");
+    const term = normalizeLabel(lead.rawTerm, "Sem utm_term");
+    return `${source}|||${term}`;
+  });
+  $("#organicTableBody").innerHTML = rows.length
+    ? rows.map(([key, count]) => {
+      const [source, term] = key.split("|||");
+      return `<tr><td>${source}</td><td>${term}</td><td>${fmtNumber.format(count)}</td></tr>`;
+    }).join("")
+    : `<tr><td class="empty" colspan="3">Nenhum lead orgânico encontrado no período.</td></tr>`;
+}
+
+function renderOrganicInstagramChart() {
+  const leads = getOrganicLeads().filter((lead) => normalizeToken(lead.rawSource).includes("instagram"));
+  const rows = countBy(leads, (lead) => normalizeLabel(lead.rawTerm, "Sem utm_term"));
+  state.charts.organicInstagram?.destroy();
+  state.charts.organicInstagram = new Chart($("#organicInstagramChart"), {
+    type: "bar",
+    data: {
+      labels: rows.map(([name]) => name),
+      datasets: [{
+        label: "Leads Instagram",
+        data: rows.map(([, count]) => count),
+        backgroundColor: rows.map((_, index) => chartColor(index))
+      }]
+    },
+    options: leadChartOptions()
+  });
+}
+
 function renderActiveFilters() {
   const labels = { campaign: "Campanha", adset: "Grupo", ad: "Anuncio" };
   const filter = getFilter();
@@ -639,9 +819,12 @@ function renderOptimizationTable() {
 function renderGeneral() {
   $("#generalView").hidden = false;
   $("#platformView").hidden = true;
+  $("#organicView").hidden = true;
+  $("#kpis").hidden = false;
   renderGroupStats();
   renderLeadSourceChart();
   renderLeadMediumDailyChart();
+  renderGroupEntryRateChart();
   renderLineChart("dailyChart", "all", "daily");
   renderCplChart("cplChart", "all", "cpl");
   renderMetricRail();
@@ -652,6 +835,8 @@ function renderGeneral() {
 function renderPlatform() {
   $("#generalView").hidden = true;
   $("#platformView").hidden = false;
+  $("#organicView").hidden = true;
+  $("#kpis").hidden = false;
   const filteredRows = getFilteredRows(state.tab);
   renderLineChart("platformDailyChart", state.tab, "platformDaily", filteredRows);
   renderLeadCplChart("platformFilterChart", state.tab, "platformFilter", filteredRows);
@@ -661,7 +846,23 @@ function renderPlatform() {
   $("#filterChartTitle").textContent = `Leads e CPL por dia${suffix}`;
 }
 
+function renderOrganic() {
+  $("#generalView").hidden = true;
+  $("#platformView").hidden = true;
+  $("#organicView").hidden = false;
+  $("#kpis").hidden = true;
+  renderOrganicCounter();
+  renderOrganicTemporalChart();
+  renderOrganicSourceChart();
+  renderOrganicTable();
+  renderOrganicInstagramChart();
+}
+
 function render() {
+  if (state.tab === "organic") {
+    renderOrganic();
+    return;
+  }
   renderKpis();
   if (state.tab === "all") renderGeneral();
   else renderPlatform();
