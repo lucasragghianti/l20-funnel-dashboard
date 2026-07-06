@@ -95,6 +95,7 @@ h2 {
 .tabs,
 .kpis,
 .leadIntelGrid,
+.organicTop,
 .overviewGrid,
 .singleChart,
 .tablePanel,
@@ -223,6 +224,45 @@ h2 {
   display: grid;
   grid-template-columns: minmax(330px, 0.7fr) minmax(0, 1fr) minmax(0, 1.15fr);
   gap: 14px;
+}
+
+.organicTop {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.6fr) 1fr 1fr;
+  gap: 14px;
+}
+
+.organicCounter {
+  min-height: 150px;
+  border: 1px solid rgba(244, 47, 106, 0.24);
+  border-radius: 8px;
+  padding: 18px;
+  background: linear-gradient(135deg, rgba(151, 27, 87, 0.72), rgba(17, 26, 58, 0.98));
+  box-shadow: var(--shadow);
+}
+
+.organicCounter .goalCard {
+  min-height: 110px;
+}
+
+.mutedPanel {
+  min-height: 150px;
+  background: linear-gradient(135deg, rgba(151, 27, 87, 0.18), rgba(0, 84, 125, 0.14));
+}
+
+.organicTable {
+  min-width: 720px;
+}
+
+.organicTable th:first-child,
+.organicTable td:first-child {
+  width: 34%;
+}
+
+.organicTable th:nth-child(2),
+.organicTable td:nth-child(2) {
+  text-align: left;
+  width: 46%;
 }
 
 .groupStats {
@@ -549,6 +589,7 @@ td:not(:first-child) {
 @media (max-width: 1120px) {
   .overviewGrid,
   .leadIntelGrid,
+  .organicTop,
   .charts,
   .resultGrid,
   .goalGrid {
