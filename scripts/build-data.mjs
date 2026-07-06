@@ -214,14 +214,16 @@ function sourceFromLead(row) {
 function makeLeadRow(raw) {
   const rawSource = String(pickLead(raw, "source", "utm_source")).trim();
   const rawMedium = String(pickLead(raw, "medium", "utm_medium")).trim();
+  const rawTerm = String(pickLead(raw, "ad", "utm_term")).trim();
   return {
     date: parseDate(pick(raw, "date")),
     source: sourceFromLead(raw),
     rawSource,
     rawMedium,
+    rawTerm,
     campaign: String(pickLead(raw, "campaign", "utm_campaign")).trim(),
     adset: String(pickLead(raw, "adset", "utm_content")).trim(),
-    ad: String(pickLead(raw, "ad", "utm_term")).trim()
+    ad: rawTerm
   };
 }
 
