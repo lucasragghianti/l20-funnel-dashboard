@@ -7,7 +7,7 @@
     <meta http-equiv="pragma" content="no-cache" />
     <meta http-equiv="expires" content="0" />
     <title>Funil de Trafego L20</title>
-    <link rel="stylesheet" href="./styles.css?v=20260705" />
+    <link rel="stylesheet" href="./styles.css?v=20260706" />
   </head>
   <body>
     <main class="shell">
@@ -43,6 +43,7 @@
         <button type="button" class="active" data-tab="all">Geral</button>
         <button type="button" data-tab="meta">Meta Ads</button>
         <button type="button" data-tab="google">Google Ads</button>
+        <button type="button" data-tab="organic">Orgânico</button>
       </nav>
 
       <section class="kpis" id="kpis"></section>
@@ -63,6 +64,16 @@
               <span>Leads por utm_medium</span>
             </div>
             <canvas id="leadMediumDailyChart" height="260"></canvas>
+          </div>
+        </section>
+
+        <section class="singleChart">
+          <div class="panel">
+            <div class="panelHeader">
+              <h2>Porcentagem de entrada em grupos por dia</h2>
+              <span>Entrou / leads totais do dia</span>
+            </div>
+            <canvas id="groupEntryRateChart" height="300"></canvas>
           </div>
         </section>
 
@@ -175,9 +186,66 @@
           </div>
         </div>
       </section>
+
+      <section id="organicView" class="organicView" hidden>
+        <section class="organicTop">
+          <div class="organicCounter" id="organicCounter"></div>
+          <div class="panel mutedPanel"></div>
+          <div class="panel mutedPanel"></div>
+        </section>
+
+        <section class="singleChart">
+          <div class="panel">
+            <div class="panelHeader">
+              <h2>Visão temporal</h2>
+              <span>Leads orgânicos por dia</span>
+            </div>
+            <canvas id="organicTemporalChart" height="300"></canvas>
+          </div>
+        </section>
+
+        <section class="singleChart">
+          <div class="panel">
+            <div class="panelHeader">
+              <h2>Leads Orgânicos Geral</h2>
+              <span>Contagem por utm_source</span>
+            </div>
+            <canvas id="organicSourceChart" height="320"></canvas>
+          </div>
+        </section>
+
+        <section class="panel tablePanel">
+          <div class="panelHeader">
+            <h2>Origem e termo</h2>
+            <span>utm_source, utm_term e contagem</span>
+          </div>
+          <div class="tableWrap">
+            <table class="organicTable">
+              <thead>
+                <tr>
+                  <th>utm_source</th>
+                  <th>utm_term</th>
+                  <th>Contagem</th>
+                </tr>
+              </thead>
+              <tbody id="organicTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="singleChart">
+          <div class="panel">
+            <div class="panelHeader">
+              <h2>Leads Orgânicos Instagram</h2>
+              <span>Contagem por utm_term</span>
+            </div>
+            <canvas id="organicInstagramChart" height="320"></canvas>
+          </div>
+        </section>
+      </section>
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
-    <script src="./app.js?v=20260705"></script>
+    <script src="./app.js?v=20260706"></script>
   </body>
 </html>
