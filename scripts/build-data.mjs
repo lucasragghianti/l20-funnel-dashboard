@@ -12,7 +12,7 @@ const SOURCES = [
     sheetId: ADS_SHEET_ID,
     sheetName: "Queries | Meta-Ads 📢",
     taxMultiplier: META_TAX,
-    sourceMatchers: ["meta", "facebook", "fb", "instagram", "ig"]
+    sourceMatchers: ["facebook ads"]
   },
   {
     key: "google",
@@ -206,9 +206,9 @@ function makeMetricRow(raw, source) {
 
 function sourceFromLead(row) {
   const source = normalizeValue(pickLead(row, "source", "utm_source"));
-  const medium = normalizeValue(pickLead(row, "medium", "utm_medium"));
-  const blob = `${source} ${medium}`;
-  return SOURCES.find((item) => item.sourceMatchers.some((matcher) => blob.includes(matcher)))?.key ?? "";
+  if (source === "facebook ads") return "meta";
+  if (["google ads", "youtube ads", "google", "youtube", "adwords", "gads"].includes(source)) return "google";
+  return "";
 }
 
 function makeLeadRow(raw) {
