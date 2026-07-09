@@ -4,6 +4,8 @@ const ADS_SHEET_ID = "1-EE1jMwW3-p1Peq9gVMoydSVSpSXM0UHeCpjOZlI2No";
 const LEADS_SHEET_ID = "1nZjONwwL9HGSw2lXjfLjIjEMCzsuS9gykYpp20SKfP0";
 const GROUPS_SHEET_ID = "1ap-pQe_To4UgEYx7v6KbCB4Ba-i8vDRQ6f-NiUI2q6A";
 const META_TAX = 1.1385;
+const FETCH_TIMEOUT_MS = 25000;
+const FETCH_ATTEMPTS = 3;
 
 const SOURCES = [
   {
@@ -172,17 +174,43 @@ function parseDate(value) {
   return "";
 }
 
+async function fetchWithTimeout(url) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "user-agent": "l20-funnel-dashboard/1.0"
+      }
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function fetchCsv(source) {
   const url = csvUrl(source.sheetId, source.sheetName);
-  const response = await fetch(url, {
-    headers: {
-      "user-agent": "l20-funnel-dashboard/1.0"
+  let lastError;
+
+  for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return response.text();
+    } catch (error) {
+      lastError = error;
+      if (attempt < FETCH_ATTEMPTS) {
+        const waitMs = attempt * 1500;
+        console.warn(`Tentativa ${attempt} falhou em ${source.sheetName || source.sheetId}. Retentando em ${waitMs}ms.`);
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+      }
     }
-  });
-  if (!response.ok) {
-    throw new Error(`Falha ao ler ${source.sheetName}: HTTP ${response.status}`);
   }
-  return response.text();
+
+  throw new Error(`Falha ao ler ${source.sheetName || source.sheetId}: ${lastError?.message || lastError}`);
 }
 
 function makeMetricRow(raw, source) {
